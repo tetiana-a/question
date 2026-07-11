@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analysis — Somatic Conflict</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/* --- БАЗОВІ ЗМІННІ ТА ТЕМИ --- */
+:root{--tt:background .5s cubic-bezier(.4,0,.2,1),color .5s cubic-bezier(.4,0,.2,1),border-color .5s cubic-bezier(.4,0,.2,1)}
+[data-theme="dark"]{--bg:#080808;--bg2:#101010;--bg3:#181818;--line:rgba(255,255,255,.07);--line2:rgba(255,255,255,.13);--txt:#efefef;--txt2:#909090;--txt3:#454545;--tag:rgba(255,255,255,.05);--hov:rgba(255,255,255,.03)}
+[data-theme="light"]{--bg:#f7f7f5;--bg2:#eeeeed;--bg3:#e4e4e2;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.13);--txt:#0c0c0c;--txt2:#565656;--txt3:#b0b0b0;--tag:rgba(0,0,0,.04);--hov:rgba(0,0,0,.025)}
+
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--txt);font-family:'Syne',sans-serif;font-weight:400;line-height:1.8;overflow-x:hidden;transition:var(--tt);font-size:18px}
+::selection{background:var(--txt);color:var(--bg)}
+a{color:inherit;text-decoration:none}
+
+.wrap{max-width:900px;margin:0 auto;padding:0 48px}
+@media(max-width:900px){.wrap{padding:0 28px}}
+@media(max-width:480px){.wrap{padding:0 20px}}
+
+/* --- ВІДЕО/КОСМІЧНИЙ ФОН --- */
+.bg-universe{
+  position:fixed;
+  inset:0;
+  z-index:-2;
+  overflow:hidden;
+  background:radial-gradient(ellipse at 50% 0%, #0d0d18 0%, #050508 55%, #000 100%);
+}
+[data-theme="light"] .bg-universe{
+  background:radial-gradient(ellipse at 50% 0%, #dfe3ee 0%, #eef0f4 55%, #f7f7f5 100%);
+  opacity:.6;
+}
+.bg-universe canvas{
+  position:absolute;
+  top:0;left:0;
+  width:100%;
+  height:100%;
+  display:block;
+}
+.bg-universe video{
+  position:absolute;
+  top:50%;left:50%;
+  width:100%;
+  height:100%;
+  transform:translate(-50%,-50%);
+  object-fit:cover; /* заповнює екран, зберігаючи вертикальні пропорції відео */
+  object-position:center;
+  opacity:.55;
+}
+[data-theme="light"] .bg-universe video{opacity:.28}
+/* легка виньєтка, щоб текст читався поверх фону */
+.bg-vignette{
+  position:fixed;
+  inset:0;
+  z-index:-1;
+  background:radial-gradient(ellipse at 50% 30%, transparent 0%, var(--bg) 85%);
+  transition:var(--tt);
+  pointer-events:none;
+}
+
+/* робимо контентні контейнери напівпрозорими, щоб фон читався крізь них */
+.case-box{background:color-mix(in srgb, var(--bg) 88%, transparent);backdrop-filter:blur(3px)}
+
+/* --- НАВІГАЦІЯ --- */
+nav{position:fixed;top:0;left:0;right:0;z-index:1000;background:color-mix(in srgb, var(--bg) 85%, transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);transition:var(--tt)}
+.nav-in{max-width:900px;margin:0 auto;padding:0 48px;height:62px;display:flex;align-items:center;justify-content:space-between}
+.nav-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:14px;letter-spacing:.06em;color:var(--txt)}
+.nav-right{display:flex;align-items:center;gap:12px}
+.nav-status{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--txt3)}
+@media(max-width:480px){.nav-in{padding:0 20px}}
+
+/* --- КНОПКА ТЕМИ --- */
+.theme-tog{width:42px;height:22px;background:var(--bg3);border:1px solid var(--line2);border-radius:11px;cursor:pointer;position:relative;flex-shrink:0;transition:var(--tt)}
+.theme-tog::before{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:var(--txt);top:3px;left:3px;transition:transform .4s cubic-bezier(.4,0,.2,1)}
+[data-theme="light"] .theme-tog::before{transform:translateX(20px)}
+
+/* --- КНОПКА МУЗИКИ --- */
+.music-fab{position:fixed;right:22px;bottom:22px;z-index:1200;display:flex;align-items:center;gap:10px;padding:0 16px 0 12px;height:46px;border-radius:999px;background:var(--bg2);color:var(--txt);border:1px solid var(--line2);box-shadow:0 8px 24px rgba(0,0,0,.18);cursor:pointer;transition:transform .2s,opacity .2s,background .2s}
+.music-fab:hover{transform:translateY(-2px);background:var(--bg3)}
+.music-fab[data-on="true"]{background:var(--txt);color:var(--bg)}
+.eq{display:flex;align-items:flex-end;gap:2px;height:16px;width:16px}
+.eq-bar{width:3px;border-radius:2px;background:currentColor;transform-origin:bottom;animation:none}
+.music-fab[data-on="true"] .eq-bar{animation:eq-anim var(--d,0.6s) ease-in-out infinite alternate}
+.eq-bar:nth-child(1){--d:.5s;height:6px}
+.eq-bar:nth-child(2){--d:.7s;height:12px}
+.eq-bar:nth-child(3){--d:.4s;height:9px}
+.eq-bar:nth-child(4){--d:.6s;height:14px}
+@keyframes eq-anim{from{transform:scaleY(.25)}to{transform:scaleY(1)}}
+.music-lbl{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase}
+
+/* --- СЕКЦІЇ ТА АНІМАЦІЇ --- */
+.sec{padding:120px 0 88px;border-top:1px solid var(--line)}
+.sec-head{display:flex;align-items:baseline;gap:20px;margin-bottom:56px}
+.sec-num{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--txt3);letter-spacing:.12em;flex-shrink:0}
+.sec-title{font-family:'Playfair Display',serif;font-size:clamp(32px,4vw,52px);font-weight:400;letter-spacing:-.025em;line-height:1.1}
+@media(max-width:600px){.sec{padding:80px 0 60px}.sec-head{margin-bottom:36px}}
+
+.rv{opacity:0;transform:translateY(28px);transition:opacity .8s cubic-bezier(.4,0,.2,1),transform .8s cubic-bezier(.4,0,.2,1)}
+.rv.on{opacity:1;transform:translateY(0)}
+.rv-d1{transition-delay:.1s}.rv-d2{transition-delay:.2s}.rv-d3{transition-delay:.3s}.rv-d4{transition-delay:.4s}.rv-d5{transition-delay:.5s}
+
+/* --- БЛОКИ КОНТЕНТУ --- */
+.case-box{border:1px solid var(--line);overflow:hidden}
+.case-body{display:grid;grid-template-columns:1fr 1fr}
+.c-blk{padding:36px 44px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);transition: background .25s}
+.c-blk:hover {background: var(--hov);}
+.c-blk:nth-child(even){border-right:none}
+.c-blk:nth-last-child(-n+2){border-bottom:none}
+.c-blk.full-width{grid-column: 1 / -1; border-right: none; border-bottom: 1px solid var(--line);}
+.c-blk.full-width:last-child { border-bottom: none; }
+
+.c-blk-lbl{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.2em;text-transform:uppercase;color:var(--txt3);margin-bottom:18px;display:flex;align-items:center;gap:8px}
+.c-blk-lbl::before{content:'';display:inline-block;width:14px;height:1px;background:var(--txt3)}
+
+.c-list{display:flex;flex-direction:column;gap:12px}
+.c-list li{display:flex;align-items:flex-start;gap:12px;font-size:15px;color:var(--txt2);line-height:1.6;list-style:none}
+.c-list li::before{content:'→';font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--txt3);flex-shrink:0;margin-top:4px}
+
+.text-block p { font-size: 16px; color: var(--txt2); margin-bottom: 16px; line-height: 1.8; }
+.text-block strong { color: var(--txt); font-weight: 600; }
+
+/* --- БЛОК ПИТАННЯ --- */
+.question-highlight {
+    background: var(--bg2);
+    padding: 30px;
+    border-left: 2px solid var(--txt3);
+    margin-top: 10px;
+}
+.question-highlight p { margin-bottom: 12px; font-size: 16px; color: var(--txt2); line-height: 1.8;}
+.question-highlight p:last-child { margin-bottom: 0; color: var(--txt); font-style: italic; font-family: 'Playfair Display', serif; font-size: 18px; line-height: 1.7;}
+
+/* Адаптивність для мобільних */
+@media(max-width:900px){
+    .case-body{grid-template-columns:1fr}
+    .c-blk{border-right:none!important}
+    .c-blk:nth-last-child(-n+2){border-bottom:1px solid var(--line)}
+    .c-blk:last-child{border-bottom:none}
+    .c-blk{padding:28px}
+    .music-fab span { display: none; } /* Ховаємо текст "Music" на мобільних, залишаємо тільки смужки */
+}
+</style>
+</head>
+<body>
+
+<!--
+  ФОН "ВСЕЛЕННА": реальне відео (universe.mp4) поруч з цим HTML-файлом.
+  Відео вертикальне (720x1280), тому object-fit:cover само центрує
+  та обрізає його під ширину екрана без спотворення пропорцій.
+-->
+<div class="bg-universe" id="bgUniverse">
+  <video autoplay muted loop playsinline>
+    <source src="54408262fc15a8401e3dd377a7586f4e.mp4" type="video/mp4">
+  </video>
+</div>
+<div class="bg-vignette"></div>
+
+<!-- Навігація з кнопкою теми -->
+<nav>
+  <div class="nav-in">
+    <a href="#" class="nav-logo">TETIANA.K</a>
+    <div class="nav-right">
+      <button class="theme-tog" id="themeBtn" aria-label="Toggle theme"></button>
+      <div class="nav-status">Analysis</div>
+    </div>
+  </div>
+</nav>
+
+<!-- Основний Контент -->
+<main>
+    <section class="sec">
+        <div class="wrap">
+            <div class="sec-head rv">
+                <span class="sec-num">01</span>
+                <h2 class="sec-title">Соматический конфликт</h2>
+            </div>
+
+            <div class="text-block rv rv-d1">
+                <p>Светлана, привет. Столкнулась с жестким внутренним блоком и нужна ваша оценка.</p>
+            </div>
+
+            <div class="case-box rv rv-d2" style="margin-top: 40px;">
+                <div class="case-body">
+                    <div class="c-blk">
+                        <div class="c-blk-lbl">IT / Отторжение</div>
+                        <p style="font-size: 15px; color: var(--txt2); line-height: 1.7;">
+                            Сейчас возникло сильное сомнение: кажется, я вообще ошиблась с выбором IT. Разум понимает, что это логично и безопасно, но когда я подступаюсь к работе, тело выдает жесткое отторжение.
+                        </p>
+                    </div>
+                    <div class="c-blk">
+                        <div class="c-blk-lbl">Трейдинг / Диссоциация</div>
+                        <p style="font-size: 15px; color: var(--txt2); line-height: 1.7;">
+                            Сначала я думала, что это дофаминовый гачок, но на самом деле там нет эйфории. Накрывает неестественное спокойствие. Я как компьютер: просто работаю, полностью отключив эмоции. Это похоже на эмоциональное онемение.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-block rv rv-d3">
+                <div class="c-blk-lbl" style="margin-top: 50px; margin-bottom: 20px;">Мой план действий</div>
+                <p>Из-за этого блока хочу пойти по параллельному пути: отдавать большую часть времени IT/AI проектам, но параллельно выделять немного времени на трейдинг/финансы (как отдушину).</p>
+            </div>
+
+            <div class="case-box rv rv-d4" style="margin-top: 50px;">
+                <div class="case-body">
+                    <div class="c-blk full-width">
+                        <div class="c-blk-lbl">Алгоритм перезаписи для IT</div>
+                        <ul class="c-list">
+                            <li><strong>Микро-шаги</strong> (открыть вкладку, а не "идти работать").</li>
+                            <li><strong>Сместить точку сборки за спину</strong> (выйти в позицию отстраненного наблюдателя).</li>
+                            <li>Открыть задачу. Когда тело выдает отвращение — <strong>не убегать</strong>, а смотреть на этот спазм со стороны 10 минут, выдерживая дискомфорт.</li>
+                            <li>Закрыть ноут с установкой <strong>"всё безопасно"</strong>.</li>
+                            <li><strong>Жестко гасить</strong> мысли о трейдинге во время работы над проектами.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="case-box rv rv-d5" style="margin-top: 50px;">
+                <div class="case-body">
+                    <div class="c-blk full-width">
+                        <div class="c-blk-lbl">Глубокий вопрос</div>
+                        <div class="question-highlight">
+                            <p>Адекватна ли моя диагностика этого "компьютерного спокойствия" в трейдинге как защитной диссоциации? И как такое расщепление фокуса (работа параллельно) повлияет на перезапись сценария?</p>
+                            <p>Чтобы сценарий реально перезаписался, достаточно ли этих физических действий или перед ними нужна ментальная преднастройка? Как отследить, какая именно установка реально "прошивает" тело, а какая проходит мимо?</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+</main>
+
+<!-- Кнопка музики -->
+<button class="music-fab" id="musicBtn" data-on="false" aria-label="Toggle music">
+  <div class="eq">
+    <div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div>
+  </div>
+  <span class="music-lbl">Music</span>
+</button>
+<audio id="bgAudio" preload="none" loop><source src="clozee-revolution.mp3" type="audio/mpeg"></audio>
+
+<!-- Скрипти -->
+<script>
+    // 1. Анімація появи при скролі
+    const rvElements = document.querySelectorAll('.rv');
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('on');
+            }
+        });
+    }, { threshold: 0.1, rootMargin: "0px 0px -50px 0px" });
+    rvElements.forEach(el => observer.observe(el));
+
+    // 2. Перемикач теми (Dark/Light)
+    const themeBtn = document.getElementById('themeBtn');
+    themeBtn.addEventListener('click', () => {
+        const html = document.documentElement;
+        const currentTheme = html.getAttribute('data-theme');
+        html.setAttribute('data-theme', currentTheme === 'dark' ? 'light' : 'dark');
+    });
+
+    // 3. Кнопка музики з анімацією
+    const musicBtn = document.getElementById('musicBtn');
+    const bgAudio = document.getElementById('bgAudio');
+    
+    musicBtn.addEventListener('click', () => {
+        const isOn = musicBtn.getAttribute('data-on') === 'true';
+        
+        if (isOn) {
+            bgAudio.pause();
+            musicBtn.setAttribute('data-on', 'false');
+        } else {
+            bgAudio.play().catch(err => console.log("Audio playback failed:", err));
+            musicBtn.setAttribute('data-on', 'true');
+        }
+    });
+
+    // 4. Відео-фон: підстраховка, якщо браузер заблокував автоплей
+    (function(){
+        const vid = document.querySelector('.bg-universe video');
+        if(!vid) return;
+        const tryPlay = () => vid.play().catch(() => {});
+        tryPlay();
+        document.addEventListener('click', tryPlay, { once: true });
+    })();
+</script>
+
+</body>
+</html>
