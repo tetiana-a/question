@@ -79,7 +79,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:1000;background:color-mix(in srg
 
 <div class="bg-universe" id="bgUniverse">
   <video id="vid1" class="active" muted playsinline>
-    <source src="9444252c5fa23f29fbe54cf6d6f950e8.mp4" type="video/mp4">
+    <source src="5a09caf64ce1249fa6a8626ac51d2d63.mp4" type="video/mp4">
   </video>
   <video id="vid2" muted playsinline>
     <source src="9444252c5fa23f29fbe54cf6d6f950e8.mp4" type="video/mp4">
@@ -140,10 +140,27 @@ nav{position:fixed;top:0;left:0;right:0;z-index:1000;background:color-mix(in srg
     rvElements.forEach(el => observer.observe(el));
 
     const themeBtn = document.getElementById('themeBtn');
+    const v1 = document.getElementById('vid1');
+    const v2 = document.getElementById('vid2');
+
     themeBtn.addEventListener('click', () => {
         const html = document.documentElement;
         const currentTheme = html.getAttribute('data-theme');
-        html.setAttribute('data-theme', currentTheme === 'dark' ? 'light' : 'dark');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-theme', newTheme);
+
+        // dark -> первое видео, light -> второе видео
+        if (newTheme === 'dark') {
+            v2.currentTime = 0;
+            v1.play().catch(() => {});
+            v1.classList.add('active');
+            v2.classList.remove('active');
+        } else {
+            v1.currentTime = 0;
+            v2.play().catch(() => {});
+            v2.classList.add('active');
+            v1.classList.remove('active');
+        }
     });
 
     const musicBtn = document.getElementById('musicBtn');
@@ -159,30 +176,11 @@ nav{position:fixed;top:0;left:0;right:0;z-index:1000;background:color-mix(in srg
         }
     });
 
-    // --- Чередование двух фоновых видео с кросс-фейдом ---
+    // --- Запуск обоих видео (проигрывается только активное по CSS-классу) ---
     (function(){
-        const v1 = document.getElementById('vid1');
-        const v2 = document.getElementById('vid2');
-        let current = v1, next = v2;
-
+        v1.loop = true;
+        v2.loop = true;
         [v1, v2].forEach(v => v.play().catch(() => {}));
-
-        function swap(){
-            next.currentTime = 0;
-            next.play().catch(() => {});
-            next.classList.add('active');
-            current.classList.remove('active');
-            const tmp = current; current = next; next = tmp;
-        }
-
-        current.addEventListener('ended', swap);
-        // safari/ios иногда не шлёт 'ended' корректно при loop=false, поэтому дублируем через timeupdate
-        current.addEventListener('timeupdate', function checkEnd(){
-            if (current.duration && current.currentTime >= current.duration - 0.15) {
-                swap();
-            }
-        });
-
         document.addEventListener('click', () => { v1.play().catch(()=>{}); v2.play().catch(()=>{}); }, { once: true });
     })();
 </script>
